@@ -212,7 +212,7 @@ if st.button("🚀 RUN COMPLIANCE DIAGNOSTIC", use_container_width=True):
                 
                 with col_cta2:
                     # REPLACE LINK WITH YOUR STRIPE LINK
-                    st.link_button("📥 DOWNLOAD FIX-IT KIT ($69)", "https://buy.stripe.com/YOUR_LINK_HERE", use_container_width=True)
+                    st.link_button("📥 DOWNLOAD FIX-IT KIT ($69)", "https://buy.stripe.com/14A4gzcQGb8P3aNbUid3i00", use_container_width=True)
             else:
                 st.balloons()
                 st.success("Perfect! Your store looks safe.")
