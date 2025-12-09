@@ -53,14 +53,22 @@ if st.button("RUN DEEP SCAN", type="primary", use_container_width=True):
             # --- HERO RESULT SECTION ---
             st.divider()
             
-            # 1. GAUGE CHART (Visual Impact)
+           # 1. GAUGE CHART (Visual Impact)
+            # Determine Color based on score
+            if score < 50:
+                bar_color = "#EF4444"  # Red
+            elif score < 80:
+                bar_color = "#F59E0B"  # Yellow/Orange
+            else:
+                bar_color = "#10B981"  # Green
+
             fig = go.Figure(go.Indicator(
                 mode = "gauge+number",
                 value = score,
                 title = {'text': "Trust Score"},
                 gauge = {
                     'axis': {'range': [None, 100]},
-                    'bar': {'color': "#10B981" if score > 80 else "#EF4444"},
+                    'bar': {'color': bar_color}, # USE THE NEW DYNAMIC COLOR
                     'steps': [
                         {'range': [0, 50], 'color': "#374151"},
                         {'range': [50, 80], 'color': "#4B5563"},
