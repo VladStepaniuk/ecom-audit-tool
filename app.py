@@ -32,7 +32,7 @@ with col2:
     st.markdown("`Status: ONLINE`")
 
 # --- INPUT SECTION ---
-url = st.text_input("ENTER STORE URL", placeholder="e.g., gymshark.com")
+url = st.text_input("ENTER STORE URL", placeholder="e.g., https://uk.gymshark.com/")
 
 if st.button("RUN DEEP SCAN", type="primary", use_container_width=True):
     if not url:
