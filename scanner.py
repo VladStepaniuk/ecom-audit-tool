@@ -1,29 +1,17 @@
 import requests
 from bs4 import BeautifulSoup
-import re
 from urllib.parse import urlparse
 
-def get_domain(url):
-    parsed = urlparse(url)
-    return parsed.netloc or parsed.path
-
 def scan_site(url):
-    # 1. Input Sanitization
+    # 1. Universal URL Cleaner
     if not url.startswith("http"):
         url = "https://" + url
     
+    # Store results in a clean structure
     results = {
         "score": 100,
-        "is_shopify": False,
-        "gpsr_compliant": False,
-        "checks": {
-            "physical_address": False,
-            "refund_policy": False,
-            "shipping_policy": False,
-            "terms_of_service": False,
-            "responsible_person": False,
-            "contact_email": False
-        },
+        "meta": {"url": url, "platform": "Unknown"},
+        "checks": {},
         "details": []
     }
 
@@ -32,121 +20,79 @@ def scan_site(url):
     }
 
     try:
-        # --- LAYER 1: PLATFORM DETECTION ---
-        # Shopify stores expose a specific JSON endpoint. 
-        # If this works, we know it's Shopify (and we look smart).
+        # --- LAYER 1: CONNECTIVITY ---
         try:
-            shopify_check = requests.get(f"{url}/products.json", headers=headers, timeout=5)
-            if shopify_check.status_code == 200:
-                results["is_shopify"] = True
-                results["details"].append("✅ Platform identified: Shopify")
-        except:
-            pass # Not critical if this fails
-
-        # --- LAYER 2: SCRAPING THE HOME PAGE ---
-        response = requests.get(url, headers=headers, timeout=10)
+            response = requests.get(url, headers=headers, timeout=8)
+        except Exception:
+            return {"error": "Could not connect. Check URL or try 'https://'"}
+            
         soup = BeautifulSoup(response.text, 'html.parser')
+        text_lower = soup.get_text().lower()
         
-        # Convert all text to lower case for case-insensitive searching
-        page_text = soup.get_text().lower()
-        
-        # Get all links to check for policy pages
-        links = [a.get('href', '').lower() for a in soup.find_all('a', href=True)]
-        link_texts = [a.get_text().lower() for a in soup.find_all('a', href=True)]
+        # Detect Platform (Shopify / WooCommerce / Wix)
+        if "/products.json" in response.text or "shopify" in response.text.lower():
+            results["meta"]["platform"] = "Shopify"
+        elif "wp-content" in response.text:
+            results["meta"]["platform"] = "WooCommerce/WordPress"
+        elif "wix.com" in response.text:
+            results["meta"]["platform"] = "Wix"
 
-        # --- CHECK 1: PHYSICAL ADDRESS (Google Merchant Center Requirement) ---
-        # Google bans stores that don't have a verified address in the footer.
-        # We look for common address keywords near the bottom of the page or in text.
-        address_keywords = [
-            "street", "road", "ave", "avenue", "lane", "suite", 
-            "floor", "box", "gmbh", "ltd", "inc", "plc"
-        ]
-        # We verify if any address keyword appears in the footer-like text or general text
-        # (A simple heuristic: usually address is in the last 20% of text, but global search is safer for MVP)
-        has_address = any(keyword in page_text for keyword in address_keywords)
+        # --- CHECK 1: GOOGLE TRUST SIGNALS ---
+        # Physical Address
+        address_keywords = ["street", "road", "ave", "avenue", "lane", "suite", "gmbh", "ltd", "inc"]
+        has_address = any(k in text_lower for k in address_keywords)
+        results["checks"]["physical_address"] = has_address
+        if not has_address: results["score"] -= 20
+
+        # Policies (Looking for links)
+        links = soup.find_all('a', href=True)
+        link_hrefs = [l['href'].lower() for l in links]
         
-        # Refined check: PO BOX is often banned by Google
-        if "po box" in page_text:
-            results["details"].append("⚠️ Warning: 'PO Box' detected. Google often rejects PO Boxes.")
+        has_refund = any("refund" in l for l in link_hrefs) or any("return" in l for l in link_hrefs)
+        has_terms = any("term" in l for l in link_hrefs) or any("condition" in l for l in link_hrefs)
+        
+        results["checks"]["refund_policy"] = has_refund
+        results["checks"]["terms_service"] = has_terms
+        
+        if not has_refund: results["score"] -= 15
+        if not has_terms: results["score"] -= 10
+
+        # --- CHECK 2: SOCIAL INTEGRITY (New Feature!) ---
+        # Detecting if they link to "facebook.com" without a username (common template error)
+        social_domains = ["facebook.com", "instagram.com", "tiktok.com", "twitter.com"]
+        broken_socials = False
+        
+        for l in link_hrefs:
+            for d in social_domains:
+                # If link is JUST "facebook.com" or "facebook.com/" it is broken
+                if d in l and len(l) < len(d) + 2: 
+                    broken_socials = True
+        
+        results["checks"]["broken_socials"] = broken_socials
+        if broken_socials:
             results["score"] -= 10
-        
-        if has_address:
-            results["checks"]["physical_address"] = True
-        else:
-            results["score"] -= 20
-            results["details"].append("❌ Critical: No physical address detected on home page.")
+            results["details"].append("⚠️ Broken Social Links detected (Links point to homepage, not profile).")
 
-        # --- CHECK 2: POLICY PAGES (Trust Signals) ---
-        # We look for links containing specific words
+        # --- CHECK 3: LAZY TEMPLATE TEXT (New Feature!) ---
+        # Detecting "Lorem Ipsum" or "Insert text here"
+        template_phrases = ["lorem ipsum", "insert text here", "add your address", "powered by shopify"]
+        has_template_text = any(p in text_lower for p in template_phrases)
         
-        # Refund Policy
-        if any("refund" in l for l in links) or any("return" in l for l in links):
-            results["checks"]["refund_policy"] = True
-        else:
-            results["score"] -= 15
-            results["details"].append("❌ Missing 'Refund Policy' link.")
-
-        # Shipping Policy
-        if any("shipping" in l for l in links) or any("delivery" in l for l in links):
-            results["checks"]["shipping_policy"] = True
-        else:
+        results["checks"]["template_text"] = has_template_text
+        if has_template_text:
             results["score"] -= 10
-            results["details"].append("⚠️ Missing 'Shipping Policy' link.")
+            results["details"].append("⚠️ Template placeholder text found (e.g., 'Lorem Ipsum').")
 
-        # Terms
-        if any("term" in l for l in links):
-            results["checks"]["terms_of_service"] = True
-        else:
-            results["score"] -= 10
-            results["details"].append("⚠️ Missing 'Terms of Service' link.")
-
-        # --- CHECK 3: CONTACT INFO ---
-        # Look for explicit email (mailto) or "contact us"
-        if any("mailto:" in l for l in links) or "contact" in page_text:
-            results["checks"]["contact_email"] = True
-        else:
-            results["score"] -= 10
-            results["details"].append("❌ No clear contact method found.")
-
-        # --- CHECK 4: GPSR COMPLIANCE (The 2025 "Panic" Feature) ---
-        # EU/UK Law requires a "Responsible Person" or "Authorised Representative"
-        gpsr_keywords = [
-            "responsible person", 
-            "authorised representative", 
-            "authorized representative", 
-            "economic operator", 
-            "eu address",
-            "uk address",
-            "importer"
-        ]
+        # --- CHECK 4: GPSR / LEGAL (2025) ---
+        gpsr_keywords = ["responsible person", "authorised representative", "eu address", "importer"]
+        is_gpsr = any(k in text_lower for k in gpsr_keywords)
         
-        # We check if ANY of these legal terms exist in the text
-        is_gpsr = any(k in page_text for k in gpsr_keywords)
-        
-        if is_gpsr:
-            results["gpsr_compliant"] = True
-            results["checks"]["responsible_person"] = True
-            results["details"].append("✅ GPSR Legal Keywords found.")
-        else:
-            results["checks"]["responsible_person"] = False
-            results["score"] -= 35  # Major penalty
-            results["details"].append("🚨 URGENT: GPSR 'Responsible Person' disclosure missing. (Illegal for EU sales)")
+        results["checks"]["gpsr_check"] = is_gpsr
+        if not is_gpsr:
+            results["score"] -= 30
+            results["details"].append("🚨 CRITICAL: Missing 'Responsible Person' (GPSR) declaration.")
 
         return results
 
     except Exception as e:
         return {"error": str(e)}
-
-# --- QUICK TEST BLOCK ---
-if __name__ == "__main__":
-    # Test it on a site immediately
-    test_url = input("Enter a URL to test (e.g. gymshark.com): ")
-    print(f"Scanning {test_url}...")
-    data = scan_site(test_url)
-    print("\n--- RESULTS ---")
-    print(f"Score: {data.get('score')}")
-    print(f"Is Shopify: {data.get('is_shopify')}")
-    print(f"GPSR Compliant: {data.get('gpsr_compliant')}")
-    print("\nDetails:")
-    for d in data.get('details', []):
-        print(d)

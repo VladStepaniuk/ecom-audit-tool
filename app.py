@@ -1,8 +1,9 @@
 import streamlit as st
 import time
+import plotly.graph_objects as go
 from scanner import scan_site
 
-# --- PAGE CONFIGURATION (Force Dark Mode in settings if possible, but CSS will handle it) ---
+# --- PAGE CONFIG ---
 st.set_page_config(
     page_title="Compliance Shield 2025",
     page_icon="🛡️",
@@ -10,209 +11,126 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- MODERN DARK THEME CSS ---
+# --- MODERN CSS (Clean & Professional) ---
 st.markdown("""
     <style>
-    /* Force Dark Background */
-    .stApp {
-        background-color: #0e1117;
-        color: #fafafa;
-    }
-    
-    /* Input Fields */
-    .stTextInput > div > div > input {
-        background-color: #262730;
-        color: white;
-        border: 1px solid #4b4b4b;
-        border-radius: 8px;
-    }
-    
-    /* Buttons */
-    .stButton>button {
-        background-color: #00D26A; /* Success Green */
-        color: #000000;
-        border: none;
-        border-radius: 8px;
-        font-weight: bold;
-        padding: 0.75rem 1rem;
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
-        background-color: #00b359;
-        box-shadow: 0 4px 15px rgba(0, 210, 106, 0.4);
-    }
-    
-    /* Cards */
-    .audit-card {
-        background-color: #1f2937;
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid #374151;
-        margin-bottom: 15px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
-    
-    /* Score Circle */
-    .score-container {
-        text-align: center;
-        padding: 20px;
-        background: #111827;
-        border-radius: 15px;
-        border: 2px solid #374151;
-    }
-    
-    h1, h2, h3 {
-        color: #ffffff !important;
-    }
-    p, li {
-        color: #d1d5db !important;
-    }
+    .stApp {background-color: #0E1117;}
+    .report-card {background-color: #1F2937; padding: 20px; border-radius: 10px; border: 1px solid #374151; margin-bottom: 15px;}
+    .success-text {color: #10B981; font-weight: bold;}
+    .error-text {color: #EF4444; font-weight: bold;}
+    .warning-text {color: #F59E0B; font-weight: bold;}
     </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR (Trust Signals) ---
-with st.sidebar:
-    st.write("### 🔒 Security Audit")
-    st.info("Scanner Version: v2.4.0")
-    st.write("Checks updated for:")
-    st.caption("✅ Google Merchant Center")
-    st.caption("✅ EU GPSR Directive (2025)")
-    st.caption("✅ Shopify Trust Signals")
-
-# --- MAIN HERO SECTION ---
-col1, col2 = st.columns([2, 1])
-
+# --- HEADER SECTION ---
+col1, col2 = st.columns([3, 1])
 with col1:
     st.title("🛡️ E-Com Compliance Shield")
-    st.markdown("""
-    <div style='background-color: #2e1065; padding: 15px; border-radius: 10px; border-left: 5px solid #8b5cf6;'>
-        <strong style='color: #c4b5fd'>NEW 2025 ENFORCEMENT:</strong> 
-        Stores missing the <b>GPSR 'Responsible Person'</b> address are now being banned by Google and blocked from EU customs.
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("**Version 2.0 (Universal Scanner)** | Scans Google, GPSR & Trust Signals.")
+with col2:
+    st.markdown("### ") 
+    st.markdown("`Status: ONLINE`")
 
-# --- SCANNER INPUT ---
-st.markdown("###") # Spacer
-url = st.text_input("ENTER STORE URL", placeholder="https://yourstore.com", help="We scan the public HTML for compliance tags.")
+# --- INPUT SECTION ---
+url = st.text_input("ENTER STORE URL", placeholder="e.g., gymshark.com")
 
-if st.button("🚀 RUN COMPLIANCE DIAGNOSTIC", use_container_width=True):
+if st.button("RUN DEEP SCAN", type="primary", use_container_width=True):
     if not url:
-        st.toast("⚠️ Please enter a URL first!", icon="⚠️")
+        st.warning("Please enter a valid URL.")
     else:
-        # FAKE LOADING ANIMATION (Builds value)
-        progress_text = "Establishing secure connection..."
-        my_bar = st.progress(0, text=progress_text)
-        
-        steps = [
-            (20, "Scanning HTML DOM structure..."),
-            (40, "Checking Google Merchant Center policies..."),
-            (60, "Verifying GPSR Responsible Person data..."),
-            (80, "Calculating Trust Score..."),
-            (100, "Finalizing Report...")
-        ]
-        
-        for percent, text in steps:
-            time.sleep(0.3) # Make it feel like it's "thinking"
-            my_bar.progress(percent, text=text)
-        
-        my_bar.empty()
+        # PROGRESS ANIMATION
+        with st.spinner('Accessing site nodes...'):
+            time.sleep(1)
+            results = scan_site(url)
 
-        # --- LOGIC ---
-        results = scan_site(url)
-        
         if "error" in results:
-            st.error(f"Could not connect to site. Reason: {results['error']}")
+            st.error(results["error"])
         else:
-            score = results.get("score", 0)
-            checks = results.get("checks", {})
-            
-            # --- RESULTS DASHBOARD ---
+            score = results["score"]
+            meta = results["meta"]
+            checks = results["checks"]
+
+            # --- HERO RESULT SECTION ---
             st.divider()
             
-            # TOP ROW: SCORE & STATUS
-            c1, c2, c3 = st.columns([1, 1, 2])
+            # 1. GAUGE CHART (Visual Impact)
+            fig = go.Figure(go.Indicator(
+                mode = "gauge+number",
+                value = score,
+                title = {'text': "Trust Score"},
+                gauge = {
+                    'axis': {'range': [None, 100]},
+                    'bar': {'color': "#10B981" if score > 80 else "#EF4444"},
+                    'steps': [
+                        {'range': [0, 50], 'color': "#374151"},
+                        {'range': [50, 80], 'color': "#4B5563"},
+                        {'range': [80, 100], 'color': "#065F46"}
+                    ]
+                }
+            ))
+            fig.update_layout(height=250, margin={'t':0,'b':0,'l':0,'r':0}, paper_bgcolor="#0E1117", font={'color': "white"})
             
+            c1, c2 = st.columns([1, 2])
             with c1:
-                # Score Color Logic
-                score_color = "#ef4444" if score < 50 else "#f59e0b" if score < 80 else "#10b981"
-                st.markdown(f"""
-                <div class="score-container">
-                    <h4 style="margin:0; color:#9ca3af;">TRUST SCORE</h4>
-                    <h1 style="font-size: 64px; margin:0; color: {score_color};">{score}</h1>
-                </div>
-                """, unsafe_allow_html=True)
-                
+                st.plotly_chart(fig, use_container_width=True)
             with c2:
-                st.markdown(f"""
-                <div class="audit-card" style="height: 100%; display: flex; flex-direction: column; justify-content: center;">
-                    <h4 style="margin:0;">STATUS</h4>
-                    <h2 style="color: {score_color};">{'CRITICAL RISK' if score < 80 else 'COMPLIANT'}</h2>
-                    <p style="margin:0;">{len(results.get('details', []))} Issues Found</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-            with c3:
-                 if checks.get("is_shopify", False):
-                     st.info("✅ Platform: Shopify Detected")
-                 else:
-                     st.warning("⚠️ Platform: Could not verify Shopify")
-            
-            # MIDDLE ROW: DETAILED CHECKS
-            st.subheader("🛑 Violation Breakdown")
-            
-            row1_col1, row1_col2 = st.columns(2)
-            
-            with row1_col1:
-                st.markdown('<div class="audit-card"><h3>🛒 Google Merchant Center</h3>', unsafe_allow_html=True)
-                
-                items = [
-                    ("Physical Address", checks.get("physical_address")),
-                    ("Refund Policy", checks.get("refund_policy")),
-                    ("Terms of Service", checks.get("terms_of_service"))
-                ]
-                
-                for label, passed in items:
-                    icon = "✅" if passed else "❌"
-                    color = "#4ade80" if passed else "#f87171"
-                    st.markdown(f"<div style='display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid #374151; padding-bottom:5px;'><span>{label}</span><span style='color:{color}; font-weight:bold;'>{icon} {'PASS' if passed else 'FAIL'}</span></div>", unsafe_allow_html=True)
-                
-                st.markdown("</div>", unsafe_allow_html=True)
+                st.markdown(f"### Detected Platform: **{meta['platform']}**")
+                if score < 100:
+                    st.error("🚨 CRITICAL COMPLIANCE FAILURES DETECTED")
+                    st.write("Your store is at risk of Google Merchant Center suspension and EU border fines.")
+                else:
+                    st.success("✅ SITE IS COMPLIANT")
+                    st.write("Good job. No obvious errors found.")
 
-            with row1_col2:
-                st.markdown('<div class="audit-card"><h3>🇪🇺 GPSR & Legal (2025)</h3>', unsafe_allow_html=True)
-                
-                items = [
-                    ("Responsible Person (EU)", checks.get("responsible_person")),
-                    ("Contact Method", checks.get("contact_email")),
-                    ("Shipping Policy", checks.get("shipping_policy"))
-                ]
-                
-                for label, passed in items:
-                    icon = "✅" if passed else "❌"
-                    color = "#4ade80" if passed else "#f87171"
-                    st.markdown(f"<div style='display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid #374151; padding-bottom:5px;'><span>{label}</span><span style='color:{color}; font-weight:bold;'>{icon} {'PASS' if passed else 'FAIL'}</span></div>", unsafe_allow_html=True)
-                
-                st.markdown("</div>", unsafe_allow_html=True)
+            # --- DETAILED TABS (Clean UX) ---
+            tab1, tab2, tab3 = st.tabs(["⚠️ Critical Errors", "🌍 GPSR/Legal", "⚙️ Tech & Trust"])
 
-            # BOTTOM ROW: THE UPSELL
-            if score < 100:
-                st.markdown("###")
-                st.error("🚨 ACTION REQUIRED: Your store is liable for fines.")
-                
-                col_cta1, col_cta2 = st.columns([2, 1])
-                
-                with col_cta1:
-                    st.markdown("""
-                    **We generated a "Fix-It Kit" specifically for these errors.**
+            with tab1:
+                st.markdown("#### Suspension Triggers")
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.markdown("**Physical Address in Footer**")
+                    if checks.get("physical_address"):
+                        st.markdown('<p class="success-text">✅ PASSED</p>', unsafe_allow_html=True)
+                    else:
+                        st.markdown('<p class="error-text">❌ FAILED (Google Mandatory)</p>', unsafe_allow_html=True)
+                with col_b:
+                    st.markdown("**Refund Policy**")
+                    if checks.get("refund_policy"):
+                        st.markdown('<p class="success-text">✅ PASSED</p>', unsafe_allow_html=True)
+                    else:
+                        st.markdown('<p class="error-text">❌ FAILED (Google Mandatory)</p>', unsafe_allow_html=True)
+
+            with tab2:
+                st.markdown("#### 2025 EU/UK Regulations")
+                st.info("Requirement: Stores selling to EU must list a 'Responsible Person'.")
+                if checks.get("gpsr_check"):
+                    st.success("✅ GPSR COMPLIANT: 'Responsible Person' found.")
+                else:
+                    st.error("❌ NON-COMPLIANT: No 'Responsible Person' or EU address found.")
+                    st.caption("This is now illegal for EU sales.")
+
+            with tab3:
+                st.markdown("#### Professionalism Check")
+                if checks.get("template_text"):
+                    st.warning("⚠️ Template Text Found (e.g. 'Lorem Ipsum').")
+                else:
+                    st.write("✅ No placeholder text found.")
                     
-                    * 📄 **Legal Template:** GPSR "Responsible Person" Widget
-                    * 📄 **Policy Template:** Google-Approved Refund Policy
-                    * 📋 **Checklist:** 12 Hidden Ban Triggers to delete
-                    """)
+                if checks.get("broken_socials"):
+                    st.warning("⚠️ Social Links are broken (Point to empty profiles).")
+                else:
+                    st.write("✅ Social media links look valid.")
+
+            # --- ACTION PLAN (The Upsell) ---
+            if score < 95:
+                st.divider()
+                st.markdown("### 🛠️ Fix These Errors Now")
                 
-                with col_cta2:
-                    # REPLACE LINK WITH YOUR STRIPE LINK
-                    st.link_button("📥 DOWNLOAD FIX-IT KIT ($69)", "https://buy.stripe.com/14A4gzcQGb8P3aNbUid3i00", use_container_width=True)
-            else:
-                st.balloons()
-                st.success("Perfect! Your store looks safe.")
+                c_up1, c_up2 = st.columns([2,1])
+                with c_up1:
+                    st.write("Don't risk your business. We have pre-written legal templates that fix all the errors above.")
+                    st.write("Includes: **GPSR Widget**, **Anti-Ban Refund Policy**, and **Google Checklist**.")
+                with c_up2:
+                    # REPLACE THIS WITH YOUR STRIPE LINK
+                    st.link_button("📥 DOWNLOAD FIX-IT KIT ($69)", "https://buy.stripe.com/14A4gzcQGb8P3aNbUid3i00", type="primary", use_container_width=True)
