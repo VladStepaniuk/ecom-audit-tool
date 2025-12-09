@@ -119,16 +119,35 @@ if st.button("RUN DEEP SCAN", type="primary", use_container_width=True):
                     st.caption("This is now illegal for EU sales.")
 
             with tab3:
-                st.markdown("#### Professionalism Check")
-                if checks.get("template_text"):
-                    st.warning("⚠️ Template Text Found (e.g. 'Lorem Ipsum').")
+                st.markdown("#### 🏗️ Brand Professionalism")
+                
+                # Email Check
+                c_email, c_fav = st.columns(2)
+                with c_email:
+                    st.write("**Support Email Status**")
+                    if checks.get("pro_email"):
+                        st.success("✅ Professional Domain")
+                        st.caption("Using a branded email (e.g. support@store.com)")
+                    else:
+                        st.warning("⚠️ Amateur Email")
+                        st.caption("Using Gmail/Yahoo hurts trust.")
+                
+                with c_fav:
+                    st.write("**Browser Icon (Favicon)**")
+                    if meta.get("favicon"):
+                        st.success("✅ Custom Icon Detected")
+                    else:
+                        st.info("ℹ️ Default/Missing Icon")
+                        st.caption("Upload a logo to look like a real brand.")
+
+                st.divider()
+                
+                # Scarcity Check
+                if checks.get("fake_scarcity"):
+                    st.error("⚠️ 'Fake Urgency' Detected")
+                    st.write("We found words like *'Hurry'* or *'Selling Out'*. Google often bans ads for misleading pressure tactics.")
                 else:
-                    st.write("✅ No placeholder text found.")
-                    
-                if checks.get("broken_socials"):
-                    st.warning("⚠️ Social Links are broken (Point to empty profiles).")
-                else:
-                    st.write("✅ Social media links look valid.")
+                    st.success("✅ Clean Sales Language (No fake scarcity found)")
 
             # --- ACTION PLAN (The Upsell) ---
             if score < 95:
